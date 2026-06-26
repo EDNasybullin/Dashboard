@@ -216,81 +216,75 @@ const initials=n=>String(n).trim().split(/\s+/).slice(0,2).map(w=>w[0]||"").join
 const AV=["#1F6FEB","#16B8A6","#F4A024","#7C5CFC","#E0556B","#16A34A","#0E8678","#B5740A"];
 
 /* ====================== column detection ====================== */
-const PATS={
-  operator:/оператор|сотрудник|менеджер|агент|ф\.?и\.?о|\bимя\b|employee|operator(?!.*звон)|\bname\b/i,
-  calls:/успеш.*звон|результат.*звон|эффект.*звон|дозвон.*успеш|success.*call|\bуспеш\b/i,
-  successKp:/успех.*кп|кп.*успех|оффер|offer|принят.*кп|кп.*оффер/i,
-  totalKp:/(total|всего|общ|кол).*кп|кп.*(total|всего|общ)|отправл.*кп|^кп$|\btotal\b.*кп/i,
-  seller:/уникал.*sell|уник.*селлер|unique.*sell|sell.*уник|уник.*продав|seller|селлер/i,
-  cr:/^\s*cr\s*$|\bcr\b|конверс|conversion|cr%|cr,/i,
+/* ====================== build operators (формат: блоки по строкам, даты по колонкам) ====================== */
+let RAW=null, HEADER=[], OPS=[], TEAM={}, DAILY=[], FOUND={}, META={};
+const isDateStr=s=>/^\d{1,2}\.\d{2}(\.\d{2,4})?$/.test(String(s).trim());
+const normName=s=>String(s||"").trim().toLowerCase().replace(/ё/g,"е").replace(/[.,]/g,"").split(/\s+/).slice(0,2).join(" ");
+const METRIC_PATS={
+  calls:/успеш.*звон/i,
+  successKp:/успех.*кп|оффер|offer/i,
+  totalKp:/total.*кп|тотал.*кп|всего.*кп|^\s*кп\s*$/i,
+  seller:/уникальн.*sell|уник.*селлер|unique.*sell|seller|селлер/i,
+  cr:/^\s*cr\s*$|конверси|\bcr\b/i,
 };
-function findCols(header){
-  const H=header.map(h=>String(h).trim());
-  const idx={}; const used=new Set();
-  const pick=(key)=>{
-    const ov=COLMAP[key];
-    if(ov!=null){ const i=(typeof ov==="number")?ov:H.findIndex(h=>h.toLowerCase()===String(ov).toLowerCase()); if(i>=0){idx[key]=i;used.add(i);return;} }
-    // порядок важен: сначала successKp (оффер), потом totalKp
-    let i=H.findIndex((h,j)=>!used.has(j)&&PATS[key].test(h));
-    if(i>=0){idx[key]=i;used.add(i);}else idx[key]=-1;
-  };
-  ["operator","calls","successKp","totalKp","seller","cr"].forEach(pick);
-  // запасной поиск оператора: первый текстовый столбец
-  return idx;
-}
+function matchMetric(t){ for(const k of ["calls","successKp","totalKp","seller","cr"]) if(METRIC_PATS[k].test(t)) return k; return null; }
 
-/* ====================== build operators ====================== */
-let RAW=null, HEADER=[], COLS={}, OPS=[], TEAM={}, DATEINFO=null;
 function buildModel(rows){
-  const hi=detectHeader(rows);
+  // строка-заголовок = первая строка с >=3 датами
+  let hi=-1;
+  for(let i=0;i<Math.min(rows.length,20);i++){ if((rows[i]||[]).filter(isDateStr).length>=3){hi=i;break;} }
+  if(hi<0) hi=detectHeader(rows);
   HEADER=rows[hi].map(h=>String(h).trim());
-  let data=rows.slice(hi+1).filter(r=>r.some(x=>String(x).trim()!==""));
-  COLS=findCols(HEADER);
-  // если оператора не нашли — берём первый преимущественно текстовый столбец
-  if(COLS.operator<0){
-    const ncol=HEADER.length;
-    for(let c=0;c<ncol;c++){let txt=0,tot=0;for(const r of data){const v=r[c];if(String(v).trim()!==""){tot++;if(toNum(v)==null)txt++;}}if(tot>=2&&txt/tot>=0.6){COLS.operator=c;break;}}
-  }
-  // дата (для динамики), если есть
-  const dCol=HEADER.findIndex(h=>/дата|date|день/i.test(h));
-  DATEINFO=dCol>=0?{col:dCol,dates:[...new Set(data.map(r=>String(r[dCol]).trim()).filter(Boolean))]}:null;
+  let nameCol=HEADER.findIndex(h=>/фио|оператор|сотрудник|\bимя\b/i.test(h)); if(nameCol<0) nameCol=0;
+  const dateCols=[]; HEADER.forEach((h,c)=>{ if(isDateStr(h)) dateCols.push(c); });
+  const dateLabels=dateCols.map(c=>HEADER[c]);
+  META={nameCol,dateCols,dateLabels,headerRow:hi};
 
-  // агрегируем по оператору
-  const map={};
-  for(const r of data){
-    const opName=COLS.operator>=0?String(r[COLS.operator]||"").trim():"";
-    if(!opName||/^(итого|total|среднее|average|сумма|всего|team|команда)/i.test(opName)||toNum(opName)!=null) continue;
-    const o=map[opName]||(map[opName]={name:opName,calls:0,totalKp:0,successKp:0,seller:0,crVals:[],rows:0});
-    const add=(k,c)=>{const v=toNum(r[c]); if(v!=null) o[k]+=v;};
-    if(COLS.calls>=0) add("calls",COLS.calls);
-    if(COLS.totalKp>=0) add("totalKp",COLS.totalKp);
-    if(COLS.successKp>=0) add("successKp",COLS.successKp);
-    if(COLS.seller>=0) add("seller",COLS.seller);
-    if(COLS.cr>=0){const v=pctCell(r[COLS.cr]); if(v!=null) o.crVals.push(v);}
-    o.rows++;
+  const map={}; let cur=null; FOUND={};
+  const dailyAgg={};
+  const ensureDaily=m=>(dailyAgg[m]||(dailyAgg[m]=dateCols.map(()=>0)));
+
+  for(let r=hi+1;r<rows.length;r++){
+    const row=rows[r]||[];
+    const a=String(row[nameCol]??"").trim();
+    if(!a) continue;
+    const dv=dateCols.map(c=>toNum(row[c]));
+    const hasNums=dv.some(v=>v!=null);
+    if(!hasNums){                                   // строка без чисел в датах = заголовок секции
+      cur=matchMetric(a); if(cur) FOUND[cur]=true;  // нераспознанные блоки (IN SERVICE и т.п.) → cur=null, пропускаем
+      continue;
+    }
+    if(!cur) continue;                              // числа есть, но мы не в нужном блоке
+    if(/^(итого|среднее|сумма|общи|all|team|команд|цель|план|факт|total\s*$)/i.test(a)) continue;
+    const key=normName(a);
+    const o=map[key]||(map[key]={name:a,calls:0,totalKp:0,successKp:0,seller:0,crVals:[],seen:0});
+    if(a.length>o.name.length) o.name=a;            // храним самое полное написание имени
+    if(cur==="cr"){ dv.forEach(v=>{ if(v!=null) o.crVals.push(v<=1.5?v*100:v); }); }
+    else o[cur]+=dv.reduce((s,v)=>s+(v||0),0);
+    o.seen++;
+    const d=ensureDaily(cur); dv.forEach((v,i)=>{ if(v!=null) d[i]+=v; });
   }
+
   OPS=Object.values(map).map(o=>{
     let cr;
-    if(o.totalKp>0 && COLS.successKp>=0) cr=o.successKp/o.totalKp*100;           // основной способ: успехи ÷ total
-    else if(o.crVals.length) cr=o.crVals.reduce((s,x)=>s+x,0)/o.crVals.length;   // иначе — среднее CR из листа
+    if(o.totalKp>0 && FOUND.successKp) cr=o.successKp/o.totalKp*100;
+    else if(o.crVals.length) cr=o.crVals.reduce((s,x)=>s+x,0)/o.crVals.length;
     else cr=null;
-    return {...o, cr};
-  });
-  // ранги по CR
-  OPS.sort((a,b)=>(b.cr??-1)-(a.cr??-1));
-  OPS.forEach((o,i)=>o.rank=i+1);
+    return {...o,cr};
+  }).filter(o=>o.calls||o.totalKp||o.successKp||o.seller||o.cr!=null);
+  OPS.sort((a,b)=>(b.cr??-1)-(a.cr??-1)); OPS.forEach((o,i)=>o.rank=i+1);
 
-  TEAM={
-    n:OPS.length,
-    calls:OPS.reduce((s,o)=>s+o.calls,0),
-    totalKp:OPS.reduce((s,o)=>s+o.totalKp,0),
-    successKp:OPS.reduce((s,o)=>s+o.successKp,0),
-    seller:OPS.reduce((s,o)=>s+o.seller,0),
-  };
+  DAILY=dateLabels.map((d,i)=>({date:d,
+    calls:(dailyAgg.calls||[])[i]||0, totalKp:(dailyAgg.totalKp||[])[i]||0, successKp:(dailyAgg.successKp||[])[i]||0}));
+
+  TEAM={n:OPS.length,
+    calls:OPS.reduce((s,o)=>s+o.calls,0), totalKp:OPS.reduce((s,o)=>s+o.totalKp,0),
+    successKp:OPS.reduce((s,o)=>s+o.successKp,0), seller:OPS.reduce((s,o)=>s+o.seller,0)};
   TEAM.cr=TEAM.totalKp>0?TEAM.successKp/TEAM.totalKp*100:(()=>{const v=OPS.map(o=>o.cr).filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;})();
   const crs=OPS.map(o=>o.cr).filter(x=>x!=null).sort((a,b)=>a-b);
   TEAM.crMedian=crs.length?(crs.length%2?crs[(crs.length-1)/2]:(crs[crs.length/2-1]+crs[crs.length/2])/2):null;
 }
+const hasMetric=k=>k==="cr"?OPS.some(o=>o.cr!=null):!!FOUND[k];
 
 /* ====================== charts ====================== */
 const C=getComputedStyle(document.documentElement); const col=n=>C.getPropertyValue(n).trim();
@@ -299,7 +293,7 @@ const charts={};
 function baseOpts(extra={}){return Object.assign({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:col("--ink"),padding:10,cornerRadius:8,boxPadding:4}},scales:{x:{grid:{display:false}},y:{grid:{color:"rgba(15,27,45,.06)"},border:{display:false}}}},extra);}
 
 /* ====================== render ====================== */
-function metricsAvailable(){ return ["calls","totalKp","successKp","seller","cr"].filter(k=>k==="cr"?OPS.some(o=>o.cr!=null):(COLS[k]>=0)); }
+function metricsAvailable(){ return ["calls","totalKp","successKp","seller","cr"].filter(hasMetric); }
 
 function render(){
   const root=document.getElementById("root");
@@ -312,24 +306,29 @@ function render(){
       <div class="sec-head"><span class="ix">02</span><h2>Воронка результата</h2><span class="hint">звонок → КП → оффер, по всей команде</span></div>
       <div class="panel" id="funnelWrap"></div>
     </section>
+    <section id="dailySec">
+      <div class="sec-head"><span class="ix">03</span><h2>Динамика по дням</h2><span class="hint">сумма по команде за каждый день</span></div>
+      <div class="panel"><div class="chart-box"><canvas id="dailyChart"></canvas></div>
+        <div class="legend"><span><i style="background:var(--signal)"></i>Успешные звонки</span><span><i style="background:var(--violet)"></i>Total КП</span><span><i style="background:var(--teal)"></i>Успехи КП</span></div></div>
+    </section>
     <section>
-      <div class="sec-head"><span class="ix">03</span><h2>Рейтинг операторов</h2><span class="hint">клик по заголовку — сортировка</span></div>
+      <div class="sec-head"><span class="ix">04</span><h2>Рейтинг операторов</h2><span class="hint">клик по заголовку — сортировка</span></div>
       <div class="tbl-wrap"><div class="tbl-scroll" id="rankWrap"></div></div>
     </section>
     <section>
-      <div class="sec-head"><span class="ix">04</span><h2>Сравнение</h2></div>
+      <div class="sec-head"><span class="ix">05</span><h2>Сравнение</h2></div>
       <div class="grid2">
         <div class="panel"><h3>CR по операторам</h3><p class="ph">Конверсия (успехи КП ÷ Total КП), отсортировано.</p><div class="chart-box"><canvas id="crChart"></canvas></div></div>
         <div class="panel"><h3>Total КП и успехи (офферы)</h3><p class="ph">Объём предложений против результата.</p><div class="chart-box"><canvas id="kpChart"></canvas></div><div class="legend"><span><i style="background:var(--signal)"></i>Total КП</span><span><i style="background:var(--teal)"></i>Успехи КП</span></div></div>
       </div>
     </section>
     <section>
-      <div class="sec-head"><span class="ix">05</span><h2>Данные</h2><span class="hint" id="tcnt"></span></div>
+      <div class="sec-head"><span class="ix">06</span><h2>Данные</h2><span class="hint" id="tcnt"></span></div>
       <div class="tbl-wrap"><div class="tbl-tools"><input id="tsearch" placeholder="Поиск…"><span class="cnt" id="tcnt2"></span></div><div class="tbl-scroll" id="rawTable"></div></div>
       ${mapPanel()}
     </section>`;
 
-  renderCharts(); renderFunnel(); renderRanking(); renderAgent(); renderTable();
+  renderCharts(); renderFunnel(); renderDaily(); renderRanking(); renderAgent(); renderTable();
   document.getElementById("refreshBtn").onclick=refresh;
 }
 
@@ -345,7 +344,7 @@ function teamKPIs(){
       ${card("Уникальный seller",`<span class="mono">${fmt(TEAM.seller)}</span>`,"всего уникальных",col("--amber"))}
       ${card("CR команды",TEAM.cr!=null?`<span class="mono">${fmt1(TEAM.cr)}</span><span class="u">%</span>`:"—","успехи ÷ Total КП",col("--rose"))}
     </div>
-    ${av.length<5?`<div class="map" style="margin-top:12px">⚠ Не все 5 показателей нашлись в таблице автоматически (${av.length}/5). Ниже видно сопоставление — точные заголовки можно прописать в <code>COLMAP</code>.</div>`:""}
+    ${av.length<5?`<div class="map" style="margin-top:12px">⚠ В таблице автоматически распознано ${av.length} из 5 блоков-метрик. ${["calls","totalKp","successKp","seller","cr"].filter(k=>!hasMetric(k)).map(k=>({calls:"Успешные звонки",totalKp:"Total КП",successKp:"Успехи КП",seller:"Уник. seller",cr:"CR"}[k])).join(", ")} — не найдены (для CR это нормально: он считается как успехи КП ÷ Total КП).</div>`:""}
   </section>`;
 }
 
@@ -417,10 +416,25 @@ function renderCharts(){
     options:baseOpts({indexAxis:labels.length>6?"y":"x"})});
 }
 
+function renderDaily(){
+  const sec=document.getElementById("dailySec");
+  const dd=DAILY.filter(d=>d.calls||d.totalKp||d.successKp);
+  if(!sec) return;
+  if(dd.length<2){ sec.classList.add("hidden"); return; }
+  sec.classList.remove("hidden");
+  charts.daily?.destroy();
+  charts.daily=new Chart(document.getElementById("dailyChart"),{type:"line",
+    data:{labels:dd.map(d=>d.date),datasets:[
+      {label:"Успешные звонки",data:dd.map(d=>d.calls),borderColor:col("--signal"),backgroundColor:"rgba(31,111,235,.08)",borderWidth:2,tension:.3,fill:true,pointRadius:0,pointHoverRadius:4},
+      {label:"Total КП",data:dd.map(d=>d.totalKp),borderColor:col("--violet"),borderWidth:2,tension:.3,fill:false,pointRadius:0,pointHoverRadius:4},
+      {label:"Успехи КП",data:dd.map(d=>d.successKp),borderColor:col("--teal"),borderWidth:2,tension:.3,fill:false,pointRadius:0,pointHoverRadius:4}]},
+    options:baseOpts({plugins:{legend:{display:false},tooltip:{mode:"index",intersect:false,backgroundColor:col("--ink"),padding:10,cornerRadius:8}},interaction:{mode:"index",intersect:false},scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:14}},y:{grid:{color:"rgba(15,27,45,.06)"},border:{display:false}}}})});
+}
+
 function renderTable(){
   const ncol=HEADER.length;
   const head="<tr>"+HEADER.map(h=>`<th>${esc(h)}</th>`).join("")+"</tr>";
-  const data=RAW.slice(detectHeader(RAW)+1).filter(r=>r.some(x=>String(x).trim()!==""));
+  const data=RAW.slice((META.headerRow||0)+1).filter(r=>r.some(x=>String(x).trim()!==""));
   const isNum=[];for(let c=0;c<ncol;c++){let nn=0,t=0;for(const r of data){if(String(r[c]).trim()!==""){t++;if(toNum(r[c])!=null)nn++;}}isNum[c]=t>=3&&nn/t>=.6;}
   const body=data.map(r=>"<tr>"+HEADER.map((_,c)=>`<td${isNum[c]?' class="num"':""}>${esc(r[c]??"")}</td>`).join("")+"</tr>").join("");
   document.getElementById("rawTable").innerHTML=`<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
@@ -431,11 +445,13 @@ function renderTable(){
 }
 
 function mapPanel(){
-  const lab=k=>COLS[k]>=0?`<code>${esc(HEADER[COLS[k]]||"—")}</code>`:`<code style="color:var(--rose)">не найдено</code>`;
-  return `<div class="map"><b>Сопоставление колонок (проверьте):</b>
-    Оператор → ${COLS.operator>=0?`<code>${esc(HEADER[COLS.operator])}</code>`:`<code style="color:var(--rose)">не найдено</code>`} ·
-    Успешные звонки → ${lab("calls")} · Total КП → ${lab("totalKp")} · Успехи КП → ${lab("successKp")} · Seller → ${lab("seller")} · CR → ${lab("cr")}.
-    Если что-то не так — задайте точные заголовки в <code>COLMAP</code> в начале файла.</div>`;
+  const L={calls:"Успешные звонки",totalKp:"Total КП",successKp:"Успехи КП (оффер)",seller:"Уник. seller",cr:"CR"};
+  const lab=k=>hasMetric(k)?`<code>${L[k]}</code>`:`<code style="color:var(--rose)">не найден</code>`;
+  const dr=(META.dateLabels&&META.dateLabels.length)?`${META.dateLabels[0]}–${META.dateLabels[META.dateLabels.length-1]} (${META.dateLabels.length} дн.)`:"не распознаны";
+  return `<div class="map"><b>Что распознано в таблице:</b>
+    блоки-метрики — ${["calls","totalKp","successKp","seller"].map(lab).join(" · ")} · CR ${hasMetric("cr")?"<code>из блока</code>":"<code>считается из КП</code>"}.
+    Период (колонки-даты): <code>${esc(dr)}</code>. Операторов: <code>${OPS.length}</code>.
+    Значения суммируются за период; разные написания имени одного оператора сшиваются по фамилии и имени.</div>`;
 }
 
 /* ====================== AGENT (rule-based + optional LLM) ====================== */
@@ -448,13 +464,23 @@ function computeInsights(){
   // саммари
   ins.summary.push(`Команда из <span class="em">${OPS.length}</span> операторов: <span class="em">${fmt(TEAM.calls)}</span> успешных звонков, <span class="em">${fmt(TEAM.totalKp)}</span> КП и <span class="em">${fmt(TEAM.successKp)}</span> офферов. CR команды — <span class="em">${TEAM.cr!=null?fmt1(TEAM.cr)+"%":"—"}</span>.`);
   if(best&&worst&&best!==worst) ins.summary.push(`Разброс по CR большой: лидер <span class="good">${esc(best.name)} (${fmt1(best.cr)}%)</span> против <span class="warn">${esc(worst.name)} (${fmt1(worst.cr)}%)</span> — разница ${fmt1(best.cr-worst.cr)} п.п.`);
-  if(DATEINFO&&DATEINFO.dates.length>1) ins.summary.push(`В листе несколько дат (${DATEINFO.dates.length}) — показатели просуммированы за период; для дневной динамики удобно смотреть лист по дням.`);
+  // дневная динамика
+  const dd=DAILY.filter(d=>d.calls||d.totalKp||d.successKp);
+  if(dd.length>1){
+    const last=dd[dd.length-1], prev=dd[dd.length-2];
+    const chg=(a,b)=>b>0?((a-b)/b*100):null;
+    const cCh=chg(last.calls,prev.calls), kCh=chg(last.successKp,prev.successKp);
+    const tr=v=>v==null?"—":(v>=0?"+":"")+fmt1(v)+"%";
+    ins.summary.push(`Последний день (${esc(last.date)}) против предыдущего: успешные звонки ${tr(cCh)}, офферы ${tr(kCh)}.`);
+    const bestDay=dd.reduce((m,d)=>d.successKp>m.successKp?d:m,dd[0]);
+    ins.summary.push(`Лучший день по офферам — <span class="em">${esc(bestDay.date)}</span> (${fmt(bestDay.successKp)}).`);
+  }
   // аномалии
   OPS.forEach(o=>{
     if(o.cr!=null&&med!=null&&o.cr<med*0.6) ins.anomalies.push({op:o.name,type:"low",text:`CR ${fmt1(o.cr)}% — заметно ниже медианы (${fmt1(med)}%).`});
     if(o.totalKp>0&&o.successKp===0) ins.anomalies.push({op:o.name,type:"low",text:`${fmt(o.totalKp)} КП и ни одного оффера.`});
-    if(COLS.calls>=0&&o.calls>0&&o.successKp===0&&o.totalKp===0) ins.anomalies.push({op:o.name,type:"low",text:`есть звонки (${fmt(o.calls)}), но нет КП и офферов.`});
-    if(COLS.seller>=0&&o.seller===0&&o.totalKp>0) ins.anomalies.push({op:o.name,type:"warn",text:`КП есть, но 0 уникальных sellers.`});
+    if(hasMetric("calls")&&o.calls>0&&o.successKp===0&&o.totalKp===0) ins.anomalies.push({op:o.name,type:"low",text:`есть звонки (${fmt(o.calls)}), но нет КП и офферов.`});
+    if(hasMetric("seller")&&o.seller===0&&o.totalKp>0) ins.anomalies.push({op:o.name,type:"warn",text:`КП есть, но 0 уникальных sellers.`});
   });
   if(best&&med!=null&&best.cr>med*1.4) ins.anomalies.push({op:best.name,type:"good",text:`CR ${fmt1(best.cr)}% — намного выше медианы, практику стоит тиражировать.`});
   // рекомендации
@@ -497,7 +523,9 @@ function renderAgent(){
 function digest(){
   return {
     лист:"Daily_JUN26",
+    период:META.dateLabels&&META.dateLabels.length?(META.dateLabels[0]+"…"+META.dateLabels[META.dateLabels.length-1]):null,
     команда:{операторов:TEAM.n,успешные_звонки:TEAM.calls,total_кп:TEAM.totalKp,успехи_кп:TEAM.successKp,уникальный_seller:TEAM.seller,cr_процент:TEAM.cr!=null?+TEAM.cr.toFixed(1):null,cr_медиана:TEAM.crMedian!=null?+TEAM.crMedian.toFixed(1):null},
+    динамика_по_дням:DAILY.filter(d=>d.calls||d.totalKp||d.successKp).map(d=>({дата:d.date,звонки:d.calls,кп:d.totalKp,офферы:d.successKp})),
     операторы:OPS.map(o=>({имя:o.name,успешные_звонки:o.calls,total_кп:o.totalKp,успехи_кп:o.successKp,уникальный_seller:o.seller,cr:o.cr!=null?+o.cr.toFixed(1):null}))
   };
 }
