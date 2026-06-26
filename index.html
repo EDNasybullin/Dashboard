@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P&S2 · Результаты по операторам</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#0F1B2D; --paper:#EEF1F5; --card:#FFFFFF;
+    --signal:#1F6FEB; --teal:#16B8A6; --amber:#F4A024; --rose:#E0556B; --violet:#7C5CFC; --green:#16A34A;
+    --muted:#5C6B7A; --line:#DBE1E8; --line-soft:#E8ECF1;
+    --shadow:0 1px 2px rgba(15,27,45,.04), 0 8px 24px -12px rgba(15,27,45,.18);
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:"Inter",system-ui,sans-serif; font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1240px; margin:0 auto; padding:0 24px}
+  .mono{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums}
+  a{color:var(--signal); text-decoration:none} a:hover{text-decoration:underline}
+
+  .topbar{position:sticky; top:0; z-index:30; background:rgba(238,241,245,.85); backdrop-filter:blur(12px); border-bottom:1px solid var(--line)}
+  .topbar-in{display:flex; align-items:center; gap:18px; height:62px}
+  .brand{display:flex; align-items:center; gap:11px; font-family:"Space Grotesk",sans-serif; font-weight:700; letter-spacing:-.01em}
+  .brand .mark{width:30px; height:30px; border-radius:8px; flex:0 0 auto; background:linear-gradient(135deg,var(--signal),var(--violet)); position:relative; box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+  .brand .mark::after{content:""; position:absolute; inset:8px; border-radius:3px; border:2px solid #fff; opacity:.85}
+  .brand small{display:block; font-family:"Inter",sans-serif; font-weight:500; font-size:11px; color:var(--muted); letter-spacing:.04em; text-transform:uppercase}
+  .spacer{flex:1}
+  .status{display:flex; align-items:center; gap:9px; font-size:13px; color:var(--muted)}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--teal); position:relative}
+  .dot::after{content:""; position:absolute; inset:-5px; border-radius:50%; border:1px solid var(--teal); animation:pulse 2.2s ease-out infinite}
+  .dot.off{background:var(--amber)} .dot.off::after{border-color:var(--amber)}
+  .dot.err{background:var(--rose); animation:none} .dot.err::after{display:none}
+  @keyframes pulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.9);opacity:0}}
+  .status b{color:var(--ink); font-weight:600}
+  .btn{font:inherit; font-weight:600; font-size:13px; color:var(--ink); cursor:pointer; background:var(--card); border:1px solid var(--line); border-radius:9px; padding:8px 13px; display:inline-flex; align-items:center; gap:7px; transition:.15s}
+  .btn:hover{border-color:var(--signal); color:var(--signal)} .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--ink); color:#fff; border-color:var(--ink)} .btn.primary:hover{background:#1b2c47; color:#fff}
+  .btn svg{width:14px;height:14px} .btn.spin svg{animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .banner{background:#FFF4E0; border:1px solid #F4C97A; border-radius:12px; padding:14px 16px; margin:16px 0 0; font-size:13.5px; color:#7A4E08}
+  .banner b{color:#5A3A06} .banner code{background:rgba(122,78,8,.1); padding:1px 6px; border-radius:5px; font-family:"JetBrains Mono",monospace; font-size:12px}
+
+  .hero{padding:44px 0 26px}
+  .eyebrow{font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--signal); margin:0 0 14px}
+  .hero h1{font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:clamp(28px,4vw,44px); line-height:1.05; letter-spacing:-.02em; margin:0 0 14px; max-width:20ch}
+  .hero p{margin:0; color:var(--muted); max-width:64ch; font-size:16px}
+
+  section{padding:14px 0}
+  .sec-head{display:flex; align-items:baseline; gap:14px; margin:0 0 16px}
+  .sec-head h2{font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:19px; letter-spacing:-.01em; margin:0}
+  .sec-head .ix{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--signal); padding-top:2px}
+  .sec-head .hint{margin-left:auto; font-size:12.5px; color:var(--muted)}
+
+  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:14px}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); position:relative; overflow:hidden}
+  .kpi::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent,var(--signal))}
+  .kpi .k-label{font-size:12px; color:var(--muted); margin-bottom:10px; min-height:30px; line-height:1.25}
+  .kpi .k-val{font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:25px; letter-spacing:-.01em; line-height:1}
+  .kpi .k-val .u{font-size:14px; color:var(--muted); font-weight:500; margin-left:2px}
+  .kpi .k-foot{font-size:11.5px; color:var(--muted); margin-top:7px}
+
+  /* operator blocks */
+  .ops{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px}
+  .op{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
+  .op-h{display:flex; align-items:center; gap:11px; padding:15px 17px; border-bottom:1px solid var(--line-soft)}
+  .op-av{width:36px; height:36px; border-radius:9px; flex:0 0 auto; display:grid; place-items:center; font-family:"Space Grotesk",sans-serif; font-weight:700; color:#fff; font-size:14px}
+  .op-name{font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:15px; line-height:1.1}
+  .op-rank{font-size:11.5px; color:var(--muted); margin-top:1px}
+  .op-tag{margin-left:auto; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px}
+  .op-tag.top{background:rgba(22,163,74,.12); color:#0E7A37} .op-tag.low{background:rgba(224,85,107,.13); color:#B33A4F}
+  .op-metrics{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line-soft)}
+  .met{background:var(--card); padding:12px 14px}
+  .met.cr{grid-column:1 / -1; background:#FBFCFE}
+  .met .m-l{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px; min-height:26px; line-height:1.2}
+  .met .m-v{font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:21px; line-height:1}
+  .met .m-v .u{font-size:12px; color:var(--muted); font-weight:500}
+  .crbar{height:6px; border-radius:3px; background:var(--line-soft); margin-top:9px; overflow:hidden}
+  .crbar i{display:block; height:100%; border-radius:3px; background:linear-gradient(90deg,var(--teal),var(--signal))}
+  .crbar.low i{background:linear-gradient(90deg,var(--amber),var(--rose))}
+  .met.cr .cmp{font-size:11px; color:var(--muted); margin-top:7px}
+
+  /* funnel */
+  .funnel{display:flex; flex-direction:column; gap:11px}
+  .fn-row{display:grid; grid-template-columns:170px 1fr 120px; align-items:center; gap:14px}
+  .fn-lab{font-size:13px; color:var(--ink); font-weight:600}
+  .fn-track{background:var(--line-soft); border-radius:9px; height:40px; overflow:hidden}
+  .fn-fill{height:100%; border-radius:9px; display:flex; align-items:center; padding:0 13px; color:#fff; font-family:"JetBrains Mono",monospace; font-weight:700; font-size:14px; min-width:60px; transition:width .5s}
+  .fn-conv{font-size:12.5px; color:var(--muted); font-family:"JetBrains Mono",monospace; text-align:right}
+  .ratios{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px}
+  .ratio{background:#F8FAFC; border:1px solid var(--line-soft); border-radius:11px; padding:12px 14px}
+  .ratio .r-v{font-family:"Space Grotesk",sans-serif; font-weight:700; font-size:20px}
+  .ratio .r-l{font-size:11.5px; color:var(--muted); margin-top:3px}
+
+  /* ranking */
+  .rank-tbl td.crcell{min-width:130px}
+  .rank-tbl td .cellbar{height:5px; border-radius:3px; background:var(--line-soft); margin-top:5px; overflow:hidden; min-width:60px}
+  .rank-tbl td .cellbar i{display:block; height:100%; background:linear-gradient(90deg,var(--teal),var(--signal))}
+  .rank-tbl tr.is-top td{background:rgba(22,163,74,.05)}
+  .rank-tbl tr.is-low td{background:rgba(224,85,107,.05)}
+  .rank-tbl th.sortable{cursor:pointer; user-select:none}
+  .rank-tbl th.sortable:hover{color:var(--ink)}
+  .rk-badge{display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:6px; background:var(--line-soft); font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:700; margin-right:9px}
+  .rk-badge.g{background:rgba(22,163,74,.15); color:#0E7A37}
+  @media (max-width:640px){ .fn-row{grid-template-columns:120px 1fr; } .fn-conv{display:none} .ratios{grid-template-columns:1fr} }
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow)}
+  .panel h3{font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:15px; margin:0 0 2px}
+  .panel .ph{font-size:12.5px; color:var(--muted); margin:0 0 14px}
+  .chart-box{position:relative; height:320px}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:12.5px; color:var(--muted)}
+  .legend i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px}
+
+  /* agent */
+  .agent{background:linear-gradient(150deg,#0F1B2D,#16243C); color:#E8EDF4; border-radius:18px; padding:22px; box-shadow:var(--shadow)}
+  .agent .a-top{display:flex; align-items:center; gap:12px; margin-bottom:6px}
+  .agent .a-ic{width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,var(--signal),var(--violet)); display:grid; place-items:center; flex:0 0 auto}
+  .agent .a-ic svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+  .agent h3{font-family:"Space Grotesk",sans-serif; font-size:17px; margin:0; color:#fff}
+  .agent .a-sub{font-size:12px; color:#9DB0C6}
+  .agent .a-actions{margin-left:auto; display:flex; gap:8px}
+  .agent .btn{background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.16); color:#E8EDF4}
+  .agent .btn:hover{border-color:var(--signal); color:#fff}
+  .agent .btn.primary{background:var(--signal); border-color:var(--signal); color:#fff}
+  .a-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px}
+  .a-card{background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10); border-radius:13px; padding:15px 16px}
+  .a-card h4{margin:0 0 10px; font-family:"Space Grotesk",sans-serif; font-size:13px; color:#fff; display:flex; align-items:center; gap:7px}
+  .a-card .badge{font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(31,111,235,.25); color:#9EC1FF}
+  .a-card p,.a-card li{font-size:13px; color:#C9D5E5; line-height:1.5}
+  .a-card ul{margin:0; padding-left:17px} .a-card li{margin:6px 0}
+  .a-card .em{color:#fff; font-weight:600}
+  .a-card .warn{color:#FFC97A} .a-card .good{color:#7EE0C6}
+  .a-llm{margin-top:14px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10); border-radius:13px; padding:16px 18px; font-size:13.5px; color:#D7E0EC; line-height:1.6; white-space:pre-wrap; display:none}
+  .a-llm.show{display:block}
+  .a-key{margin-top:12px; display:flex; gap:8px; align-items:center; font-size:12px; color:#9DB0C6}
+  .a-key input{flex:1; max-width:340px; font:inherit; font-size:12px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.16); color:#fff; border-radius:8px; padding:7px 10px}
+  .a-key input::placeholder{color:#7E90A8}
+
+  .tbl-wrap{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
+  .tbl-tools{display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line-soft)}
+  .tbl-tools input{font:inherit; font-size:13px; padding:7px 11px; border:1px solid var(--line); border-radius:8px; width:240px; max-width:50vw}
+  .tbl-tools input:focus{outline:none; border-color:var(--signal)}
+  .tbl-tools .cnt{margin-left:auto; font-size:12px; color:var(--muted)}
+  .tbl-scroll{overflow:auto; max-height:560px}
+  table{border-collapse:collapse; width:100%; font-size:13px}
+  th,td{padding:10px 14px; text-align:right; white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{position:sticky; top:0; background:#F8FAFC; color:var(--muted); font-weight:600; font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; border-bottom:1px solid var(--line)}
+  tbody td{border-bottom:1px solid var(--line-soft)} tbody tr:hover td{background:#F8FAFC}
+  td.num{font-family:"JetBrains Mono",monospace}
+
+  .map{font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; margin-top:8px}
+  .map b{color:var(--ink)} .map code{font-family:"JetBrains Mono",monospace; background:var(--line-soft); padding:1px 6px; border-radius:5px}
+  .notice{background:var(--card); border:1px dashed var(--line); border-radius:14px; padding:22px; color:var(--muted); text-align:center}
+  .notice b{color:var(--ink)}
+
+  footer{margin-top:42px; border-top:1px solid var(--line); padding:30px 0 56px; color:var(--muted); font-size:13px}
+  .hidden{display:none !important}
+  @media (max-width:900px){ .kpis{grid-template-columns:repeat(2,1fr)} .grid2,.a-grid{grid-template-columns:1fr} }
+  @media (prefers-reduced-motion:reduce){*{animation:none !important}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="wrap topbar-in">
+  <div class="brand"><span class="mark"></span><span>P&amp;S2 · Результаты<small>дашборд по операторам</small></span></div>
+  <span class="spacer"></span>
+  <div class="status"><span class="dot off" id="dot"></span><span id="statusText">Подключение…</span></div>
+  <button class="btn" id="refreshBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>Обновить</button>
+</div></div>
+
+<div class="wrap"><div id="fileBanner" class="banner hidden"></div></div>
+
+<header class="hero wrap">
+  <p class="eyebrow">Контакт-центр · Daily_JUN26</p>
+  <h1>Результаты по операторам — прозрачная картина проекта</h1>
+  <p>Данные читаются напрямую из опубликованной Google-таблицы и обновляются по таймеру. По каждому оператору — успешные звонки, Total КП, успехи КП (офферы), уникальные sellers и конверсия (CR). Сверху — агент-аналитик для руководителя.</p>
+</header>
+
+<main class="wrap" id="root">
+  <section><div class="notice" id="bootNotice">Загрузка данных…</div></section>
+</main>
+
+<footer class="wrap">
+  Источник: опубликованная таблица «P&S2_Результаты», лист Daily_JUN26 ·
+  <a id="sheetLink" href="#" target="_blank" rel="noopener">открыть публикацию</a>.
+  <span id="syncLine" class="mono" style="display:block;margin-top:6px;font-size:12px"></span>
+</footer>
+
+<script>
+/* ====================== CONFIG ====================== */
+const PUB_ID="2PACX-1vQs2e4zDSFJyj23MNn045iR2U5kpKDAzkwXxMFMI8rVF19xhgxijKAufg5Scz_UtGbgbfOfEeQIXjys";
+const GID="882332784";
+const REFRESH_MS=120000;
+const MODEL="claude-sonnet-4-6";
+/* Если автоопределение колонок ошибётся — впишите точные заголовки из таблицы (или индекс с 0). null = авто */
+const COLMAP={ operator:null, calls:null, totalKp:null, successKp:null, seller:null, cr:null };
+
+const csvUrl=g=>`https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?gid=${g}&single=true&output=csv&t=${Date.now()}`;
+const LOCAL=location.protocol==="file:";
+
+/* ====================== utils ====================== */
+const fmt =n=>n==null||isNaN(n)?"—":Math.round(n).toLocaleString("ru-RU");
+const fmt1=n=>n==null||isNaN(n)?"—":n.toLocaleString("ru-RU",{maximumFractionDigits:1});
+const esc =s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toNum(s){if(s==null)return null;if(typeof s==="number")return isNaN(s)?null:s;let t=String(s).trim();if(t==="")return null;t=t.replace(/%/g,"").replace(/[\s\u00A0]/g,"").replace(/(\d),(\d)/g,"$1.$2");if(!/^-?\d*\.?\d+$/.test(t))return null;const n=Number(t);return isNaN(n)?null:n;}
+function pctCell(s){if(s==null||s==="")return null;const str=String(s);const n=toNum(str);if(n==null)return null;if(str.includes("%"))return +n.toFixed(2);return n<=1.5?+(n*100).toFixed(2):+n.toFixed(2);}
+function parseCSV(text){const rows=[];let row=[],cur="",q=false;for(let i=0;i<text.length;i++){const ch=text[i];if(q){if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=ch;}else{if(ch==='"')q=true;else if(ch===','){row.push(cur);cur="";}else if(ch==='\n'){row.push(cur);rows.push(row);row=[];cur="";}else if(ch==='\r'){}else cur+=ch;}}if(cur!==""||row.length){row.push(cur);rows.push(row);}return rows;}
+async function fetchCSV(g){const r=await fetch(csvUrl(g));if(!r.ok)throw new Error("HTTP "+r.status);const t=await r.text();if(/^\s*</.test(t))throw new Error("not CSV");return parseCSV(t);}
+function detectHeader(rows){let best=0,bc=-1;for(let i=0;i<Math.min(rows.length,8);i++){const c=rows[i].filter(x=>String(x).trim()!=="").length;if(c>bc){bc=c;best=i;}}return best;}
+const initials=n=>String(n).trim().split(/\s+/).slice(0,2).map(w=>w[0]||"").join("").toUpperCase()||"?";
+const AV=["#1F6FEB","#16B8A6","#F4A024","#7C5CFC","#E0556B","#16A34A","#0E8678","#B5740A"];
+
+/* ====================== column detection ====================== */
+const PATS={
+  operator:/оператор|сотрудник|менеджер|агент|ф\.?и\.?о|\bимя\b|employee|operator(?!.*звон)|\bname\b/i,
+  calls:/успеш.*звон|результат.*звон|эффект.*звон|дозвон.*успеш|success.*call|\bуспеш\b/i,
+  successKp:/успех.*кп|кп.*успех|оффер|offer|принят.*кп|кп.*оффер/i,
+  totalKp:/(total|всего|общ|кол).*кп|кп.*(total|всего|общ)|отправл.*кп|^кп$|\btotal\b.*кп/i,
+  seller:/уникал.*sell|уник.*селлер|unique.*sell|sell.*уник|уник.*продав|seller|селлер/i,
+  cr:/^\s*cr\s*$|\bcr\b|конверс|conversion|cr%|cr,/i,
+};
+function findCols(header){
+  const H=header.map(h=>String(h).trim());
+  const idx={}; const used=new Set();
+  const pick=(key)=>{
+    const ov=COLMAP[key];
+    if(ov!=null){ const i=(typeof ov==="number")?ov:H.findIndex(h=>h.toLowerCase()===String(ov).toLowerCase()); if(i>=0){idx[key]=i;used.add(i);return;} }
+    // порядок важен: сначала successKp (оффер), потом totalKp
+    let i=H.findIndex((h,j)=>!used.has(j)&&PATS[key].test(h));
+    if(i>=0){idx[key]=i;used.add(i);}else idx[key]=-1;
+  };
+  ["operator","calls","successKp","totalKp","seller","cr"].forEach(pick);
+  // запасной поиск оператора: первый текстовый столбец
+  return idx;
+}
+
+/* ====================== build operators ====================== */
+let RAW=null, HEADER=[], COLS={}, OPS=[], TEAM={}, DATEINFO=null;
+function buildModel(rows){
+  const hi=detectHeader(rows);
+  HEADER=rows[hi].map(h=>String(h).trim());
+  let data=rows.slice(hi+1).filter(r=>r.some(x=>String(x).trim()!==""));
+  COLS=findCols(HEADER);
+  // если оператора не нашли — берём первый преимущественно текстовый столбец
+  if(COLS.operator<0){
+    const ncol=HEADER.length;
+    for(let c=0;c<ncol;c++){let txt=0,tot=0;for(const r of data){const v=r[c];if(String(v).trim()!==""){tot++;if(toNum(v)==null)txt++;}}if(tot>=2&&txt/tot>=0.6){COLS.operator=c;break;}}
+  }
+  // дата (для динамики), если есть
+  const dCol=HEADER.findIndex(h=>/дата|date|день/i.test(h));
+  DATEINFO=dCol>=0?{col:dCol,dates:[...new Set(data.map(r=>String(r[dCol]).trim()).filter(Boolean))]}:null;
+
+  // агрегируем по оператору
+  const map={};
+  for(const r of data){
+    const opName=COLS.operator>=0?String(r[COLS.operator]||"").trim():"";
+    if(!opName||/^(итого|total|среднее|average|сумма|всего|team|команда)/i.test(opName)||toNum(opName)!=null) continue;
+    const o=map[opName]||(map[opName]={name:opName,calls:0,totalKp:0,successKp:0,seller:0,crVals:[],rows:0});
+    const add=(k,c)=>{const v=toNum(r[c]); if(v!=null) o[k]+=v;};
+    if(COLS.calls>=0) add("calls",COLS.calls);
+    if(COLS.totalKp>=0) add("totalKp",COLS.totalKp);
+    if(COLS.successKp>=0) add("successKp",COLS.successKp);
+    if(COLS.seller>=0) add("seller",COLS.seller);
+    if(COLS.cr>=0){const v=pctCell(r[COLS.cr]); if(v!=null) o.crVals.push(v);}
+    o.rows++;
+  }
+  OPS=Object.values(map).map(o=>{
+    let cr;
+    if(o.totalKp>0 && COLS.successKp>=0) cr=o.successKp/o.totalKp*100;           // основной способ: успехи ÷ total
+    else if(o.crVals.length) cr=o.crVals.reduce((s,x)=>s+x,0)/o.crVals.length;   // иначе — среднее CR из листа
+    else cr=null;
+    return {...o, cr};
+  });
+  // ранги по CR
+  OPS.sort((a,b)=>(b.cr??-1)-(a.cr??-1));
+  OPS.forEach((o,i)=>o.rank=i+1);
+
+  TEAM={
+    n:OPS.length,
+    calls:OPS.reduce((s,o)=>s+o.calls,0),
+    totalKp:OPS.reduce((s,o)=>s+o.totalKp,0),
+    successKp:OPS.reduce((s,o)=>s+o.successKp,0),
+    seller:OPS.reduce((s,o)=>s+o.seller,0),
+  };
+  TEAM.cr=TEAM.totalKp>0?TEAM.successKp/TEAM.totalKp*100:(()=>{const v=OPS.map(o=>o.cr).filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;})();
+  const crs=OPS.map(o=>o.cr).filter(x=>x!=null).sort((a,b)=>a-b);
+  TEAM.crMedian=crs.length?(crs.length%2?crs[(crs.length-1)/2]:(crs[crs.length/2-1]+crs[crs.length/2])/2):null;
+}
+
+/* ====================== charts ====================== */
+const C=getComputedStyle(document.documentElement); const col=n=>C.getPropertyValue(n).trim();
+Chart.defaults.font.family="Inter, sans-serif"; Chart.defaults.font.size=11; Chart.defaults.color=col("--muted");
+const charts={};
+function baseOpts(extra={}){return Object.assign({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:col("--ink"),padding:10,cornerRadius:8,boxPadding:4}},scales:{x:{grid:{display:false}},y:{grid:{color:"rgba(15,27,45,.06)"},border:{display:false}}}},extra);}
+
+/* ====================== render ====================== */
+function metricsAvailable(){ return ["calls","totalKp","successKp","seller","cr"].filter(k=>k==="cr"?OPS.some(o=>o.cr!=null):(COLS[k]>=0)); }
+
+function render(){
+  const root=document.getElementById("root");
+  if(!OPS.length){ root.innerHTML=`<section><div class="notice">Данные получены, но операторов не распознать. Проверьте колонку с именами — её можно задать вручную в начале файла в <b>COLMAP.operator</b>.</div></section>${mapPanel()}`; return; }
+
+  root.innerHTML=`
+    ${teamKPIs()}
+    ${agentPanel()}
+    <section>
+      <div class="sec-head"><span class="ix">02</span><h2>Воронка результата</h2><span class="hint">звонок → КП → оффер, по всей команде</span></div>
+      <div class="panel" id="funnelWrap"></div>
+    </section>
+    <section>
+      <div class="sec-head"><span class="ix">03</span><h2>Рейтинг операторов</h2><span class="hint">клик по заголовку — сортировка</span></div>
+      <div class="tbl-wrap"><div class="tbl-scroll" id="rankWrap"></div></div>
+    </section>
+    <section>
+      <div class="sec-head"><span class="ix">04</span><h2>Сравнение</h2></div>
+      <div class="grid2">
+        <div class="panel"><h3>CR по операторам</h3><p class="ph">Конверсия (успехи КП ÷ Total КП), отсортировано.</p><div class="chart-box"><canvas id="crChart"></canvas></div></div>
+        <div class="panel"><h3>Total КП и успехи (офферы)</h3><p class="ph">Объём предложений против результата.</p><div class="chart-box"><canvas id="kpChart"></canvas></div><div class="legend"><span><i style="background:var(--signal)"></i>Total КП</span><span><i style="background:var(--teal)"></i>Успехи КП</span></div></div>
+      </div>
+    </section>
+    <section>
+      <div class="sec-head"><span class="ix">05</span><h2>Данные</h2><span class="hint" id="tcnt"></span></div>
+      <div class="tbl-wrap"><div class="tbl-tools"><input id="tsearch" placeholder="Поиск…"><span class="cnt" id="tcnt2"></span></div><div class="tbl-scroll" id="rawTable"></div></div>
+      ${mapPanel()}
+    </section>`;
+
+  renderCharts(); renderFunnel(); renderRanking(); renderAgent(); renderTable();
+  document.getElementById("refreshBtn").onclick=refresh;
+}
+
+function teamKPIs(){
+  const av=metricsAvailable();
+  const card=(lbl,val,foot,acc)=>`<div class="kpi" style="--accent:${acc}"><div class="k-label">${lbl}</div><div class="k-val">${val}</div><div class="k-foot">${foot}</div></div>`;
+  return `<section>
+    <div class="sec-head"><span class="ix">01</span><h2>Итоги по команде</h2><span class="hint">сумма по всем операторам</span></div>
+    <div class="kpis">
+      ${card("Успешные звонки",`<span class="mono">${fmt(TEAM.calls)}</span>`,"всего по проекту",col("--signal"))}
+      ${card("Total КП",`<span class="mono">${fmt(TEAM.totalKp)}</span>`,"предложений отправлено",col("--violet"))}
+      ${card("Успехи КП (оффер)",`<span class="mono">${fmt(TEAM.successKp)}</span>`,"принятых офферов",col("--teal"))}
+      ${card("Уникальный seller",`<span class="mono">${fmt(TEAM.seller)}</span>`,"всего уникальных",col("--amber"))}
+      ${card("CR команды",TEAM.cr!=null?`<span class="mono">${fmt1(TEAM.cr)}</span><span class="u">%</span>`:"—","успехи ÷ Total КП",col("--rose"))}
+    </div>
+    ${av.length<5?`<div class="map" style="margin-top:12px">⚠ Не все 5 показателей нашлись в таблице автоматически (${av.length}/5). Ниже видно сопоставление — точные заголовки можно прописать в <code>COLMAP</code>.</div>`:""}
+  </section>`;
+}
+
+function renderFunnel(){
+  const stages=[
+    {k:"calls",l:"Успешные звонки",c:col("--signal")},
+    {k:"totalKp",l:"Total КП",c:col("--violet")},
+    {k:"successKp",l:"Успехи КП (оффер)",c:col("--teal")},
+  ];
+  const vals=stages.map(s=>TEAM[s.k]||0);
+  const mx=Math.max(...vals,1);
+  let html="";
+  stages.forEach((s,i)=>{
+    const w=Math.max(6,vals[i]/mx*100);
+    const conv=i===0?"старт":(vals[i-1]>0?fmt1(vals[i]/vals[i-1]*100)+"% от пред.":"—");
+    html+=`<div class="fn-row"><div class="fn-lab">${s.l}</div><div class="fn-track"><div class="fn-fill" style="width:${w}%;background:${s.c}">${fmt(vals[i])}</div></div><div class="fn-conv">${conv}</div></div>`;
+  });
+  const kpPerCall=TEAM.calls>0?TEAM.totalKp/TEAM.calls:null;
+  const offPerCall=TEAM.calls>0?TEAM.successKp/TEAM.calls*100:null;
+  document.getElementById("funnelWrap").innerHTML=`<div class="funnel">${html}</div>
+    <div class="ratios">
+      <div class="ratio"><div class="r-v mono">${TEAM.cr!=null?fmt1(TEAM.cr)+"%":"—"}</div><div class="r-l">CR · успехи КП ÷ Total КП</div></div>
+      <div class="ratio"><div class="r-v mono">${kpPerCall!=null?fmt1(kpPerCall):"—"}</div><div class="r-l">КП на успешный звонок</div></div>
+      <div class="ratio"><div class="r-v mono">${offPerCall!=null?fmt1(offPerCall)+"%":"—"}</div><div class="r-l">оффер на звонок</div></div>
+    </div>`;
+}
+
+let rankSort={key:"cr",dir:-1};
+function renderRanking(){
+  const cols=[["name","Оператор"],["calls","Успешные звонки"],["totalKp","Total КП"],["successKp","Успехи КП"],["seller","Уник. seller"],["cr","CR"]];
+  const arr=[...OPS].sort((a,b)=>{
+    const k=rankSort.key;
+    if(k==="name") return rankSort.dir*String(a.name).localeCompare(String(b.name),"ru");
+    return rankSort.dir*(((a[k]??-Infinity))-((b[k]??-Infinity)));
+  });
+  const crMax=Math.max(...OPS.map(o=>o.cr||0),1), med=TEAM.crMedian;
+  const head="<tr>"+cols.map(([k,l])=>`<th class="sortable" data-k="${k}">${l}${rankSort.key===k?(rankSort.dir<0?" ▼":" ▲"):""}</th>`).join("")+"</tr>";
+  const body=arr.map(o=>{
+    const top=o.rank===1&&o.cr!=null, low=o.cr!=null&&med!=null&&o.cr<med*0.6;
+    const crW=o.cr!=null?Math.max(4,Math.min(100,o.cr/crMax*100)):0;
+    return `<tr class="${top?"is-top":""}${low?" is-low":""}">
+      <td><span class="rk-badge ${top?"g":""}">${o.rank}</span>${esc(o.name)}</td>
+      <td class="num">${fmt(o.calls)}</td>
+      <td class="num">${fmt(o.totalKp)}</td>
+      <td class="num">${fmt(o.successKp)}</td>
+      <td class="num">${fmt(o.seller)}</td>
+      <td class="num crcell">${o.cr!=null?fmt1(o.cr)+"%":"—"}<div class="cellbar"><i style="width:${crW}%"></i></div></td>
+    </tr>`;
+  }).join("");
+  document.getElementById("rankWrap").innerHTML=`<table class="rank-tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  document.querySelectorAll("#rankWrap th.sortable").forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k;
+    if(rankSort.key===k) rankSort.dir*=-1; else rankSort={key:k,dir:k==="name"?1:-1};
+    renderRanking();
+  });
+}
+
+function renderCharts(){
+  const labels=OPS.map(o=>o.name);
+  charts.cr?.destroy();
+  charts.cr=new Chart(document.getElementById("crChart"),{type:"bar",
+    data:{labels,datasets:[{data:OPS.map(o=>o.cr),backgroundColor:OPS.map(o=>o.cr!=null&&TEAM.crMedian!=null&&o.cr<TEAM.crMedian*0.6?col("--rose"):col("--signal")),borderRadius:5,maxBarThickness:30}]},
+    options:baseOpts({indexAxis:labels.length>6?"y":"x",plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" CR "+fmt1(c.raw)+"%"}}},scales:labels.length>6?{x:{ticks:{callback:v=>v+"%"},grid:{color:"rgba(15,27,45,.06)"},border:{display:false}},y:{grid:{display:false}}}:{y:{ticks:{callback:v=>v+"%"},grid:{color:"rgba(15,27,45,.06)"},border:{display:false}},x:{grid:{display:false}}}})});
+  charts.kp?.destroy();
+  charts.kp=new Chart(document.getElementById("kpChart"),{type:"bar",
+    data:{labels,datasets:[
+      {label:"Total КП",data:OPS.map(o=>o.totalKp),backgroundColor:col("--signal"),borderRadius:4,maxBarThickness:22},
+      {label:"Успехи КП",data:OPS.map(o=>o.successKp),backgroundColor:col("--teal"),borderRadius:4,maxBarThickness:22}]},
+    options:baseOpts({indexAxis:labels.length>6?"y":"x"})});
+}
+
+function renderTable(){
+  const ncol=HEADER.length;
+  const head="<tr>"+HEADER.map(h=>`<th>${esc(h)}</th>`).join("")+"</tr>";
+  const data=RAW.slice(detectHeader(RAW)+1).filter(r=>r.some(x=>String(x).trim()!==""));
+  const isNum=[];for(let c=0;c<ncol;c++){let nn=0,t=0;for(const r of data){if(String(r[c]).trim()!==""){t++;if(toNum(r[c])!=null)nn++;}}isNum[c]=t>=3&&nn/t>=.6;}
+  const body=data.map(r=>"<tr>"+HEADER.map((_,c)=>`<td${isNum[c]?' class="num"':""}>${esc(r[c]??"")}</td>`).join("")+"</tr>").join("");
+  document.getElementById("rawTable").innerHTML=`<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  document.getElementById("tcnt").textContent=data.length+" строк";
+  const inp=document.getElementById("tsearch"),cnt=document.getElementById("tcnt2"),tb=document.querySelector("#rawTable tbody"),rows=[...tb.rows];
+  const upd=()=>{const q=inp.value.trim().toLowerCase();let v=0;rows.forEach(tr=>{const ok=!q||tr.textContent.toLowerCase().includes(q);tr.style.display=ok?"":"none";if(ok)v++;});cnt.textContent=v+" / "+rows.length;};
+  inp.oninput=upd; upd();
+}
+
+function mapPanel(){
+  const lab=k=>COLS[k]>=0?`<code>${esc(HEADER[COLS[k]]||"—")}</code>`:`<code style="color:var(--rose)">не найдено</code>`;
+  return `<div class="map"><b>Сопоставление колонок (проверьте):</b>
+    Оператор → ${COLS.operator>=0?`<code>${esc(HEADER[COLS.operator])}</code>`:`<code style="color:var(--rose)">не найдено</code>`} ·
+    Успешные звонки → ${lab("calls")} · Total КП → ${lab("totalKp")} · Успехи КП → ${lab("successKp")} · Seller → ${lab("seller")} · CR → ${lab("cr")}.
+    Если что-то не так — задайте точные заголовки в <code>COLMAP</code> в начале файла.</div>`;
+}
+
+/* ====================== AGENT (rule-based + optional LLM) ====================== */
+function computeInsights(){
+  const ins={summary:[],anomalies:[],recs:[]};
+  if(!OPS.length) return ins;
+  const withCr=OPS.filter(o=>o.cr!=null);
+  const best=withCr[0], worst=withCr[withCr.length-1];
+  const med=TEAM.crMedian;
+  // саммари
+  ins.summary.push(`Команда из <span class="em">${OPS.length}</span> операторов: <span class="em">${fmt(TEAM.calls)}</span> успешных звонков, <span class="em">${fmt(TEAM.totalKp)}</span> КП и <span class="em">${fmt(TEAM.successKp)}</span> офферов. CR команды — <span class="em">${TEAM.cr!=null?fmt1(TEAM.cr)+"%":"—"}</span>.`);
+  if(best&&worst&&best!==worst) ins.summary.push(`Разброс по CR большой: лидер <span class="good">${esc(best.name)} (${fmt1(best.cr)}%)</span> против <span class="warn">${esc(worst.name)} (${fmt1(worst.cr)}%)</span> — разница ${fmt1(best.cr-worst.cr)} п.п.`);
+  if(DATEINFO&&DATEINFO.dates.length>1) ins.summary.push(`В листе несколько дат (${DATEINFO.dates.length}) — показатели просуммированы за период; для дневной динамики удобно смотреть лист по дням.`);
+  // аномалии
+  OPS.forEach(o=>{
+    if(o.cr!=null&&med!=null&&o.cr<med*0.6) ins.anomalies.push({op:o.name,type:"low",text:`CR ${fmt1(o.cr)}% — заметно ниже медианы (${fmt1(med)}%).`});
+    if(o.totalKp>0&&o.successKp===0) ins.anomalies.push({op:o.name,type:"low",text:`${fmt(o.totalKp)} КП и ни одного оффера.`});
+    if(COLS.calls>=0&&o.calls>0&&o.successKp===0&&o.totalKp===0) ins.anomalies.push({op:o.name,type:"low",text:`есть звонки (${fmt(o.calls)}), но нет КП и офферов.`});
+    if(COLS.seller>=0&&o.seller===0&&o.totalKp>0) ins.anomalies.push({op:o.name,type:"warn",text:`КП есть, но 0 уникальных sellers.`});
+  });
+  if(best&&med!=null&&best.cr>med*1.4) ins.anomalies.push({op:best.name,type:"good",text:`CR ${fmt1(best.cr)}% — намного выше медианы, практику стоит тиражировать.`});
+  // рекомендации
+  if(worst&&best&&worst!==best) ins.recs.push(`Разобрать звонки <span class="em">${esc(worst.name)}</span> и сравнить со скриптом <span class="em">${esc(best.name)}</span> — перенять подход лидера.`);
+  const zeroOffer=OPS.filter(o=>o.totalKp>0&&o.successKp===0);
+  if(zeroOffer.length) ins.recs.push(`У ${zeroOffer.map(o=>esc(o.name)).join(", ")} КП не конвертируются в офферы — проверить качество КП и работу с возражениями.`);
+  const lowList=OPS.filter(o=>o.cr!=null&&med!=null&&o.cr<med*0.6);
+  if(lowList.length) ins.recs.push(`Назначить наставничество для отстающих по CR (${lowList.map(o=>esc(o.name)).join(", ")}) на ближайшую неделю и переснять метрику.`);
+  if(best) ins.recs.push(`Зафиксировать и описать практику <span class="em">${esc(best.name)}</span> как эталон, провести по ней мини-обучение команды.`);
+  if(!ins.anomalies.length) ins.anomalies.push({op:"",type:"good",text:"Явных аномалий не обнаружено — показатели в норме."});
+  return ins;
+}
+function agentPanel(){
+  return `<section><div class="agent" id="agent">
+    <div class="a-top">
+      <span class="a-ic"><svg viewBox="0 0 24 24"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18 12h3M16.3 7.7l2.1-2.1"/><rect x="7" y="9" width="10" height="9" rx="2"/><path d="M10 13h.01M14 13h.01"/></svg></span>
+      <div><h3>AI-агент руководителя</h3><div class="a-sub" id="agentSub">Саммари динамики · аномалии · черновик рекомендаций</div></div>
+      <div class="a-actions">
+        <button class="btn" id="agentRecalc">Пересчитать</button>
+        <button class="btn primary" id="agentLLM">Разбор через Claude</button>
+      </div>
+    </div>
+    <div class="a-grid" id="agentGrid"></div>
+    <div class="a-llm" id="agentLLMOut"></div>
+    <div class="a-key" id="agentKeyRow"></div>
+  </div></section>`;
+}
+function renderAgent(){
+  const ins=computeInsights();
+  const sum=ins.summary.map(s=>`<p>${s}</p>`).join("");
+  const anom=`<ul>${ins.anomalies.map(a=>`<li><span class="${a.type==="good"?"good":"warn"} em">${a.op?esc(a.op)+": ":""}</span>${a.text}</li>`).join("")}</ul>`;
+  const recs=`<ul>${ins.recs.map(r=>`<li>${r}</li>`).join("")}</ul>`;
+  document.getElementById("agentGrid").innerHTML=`
+    <div class="a-card"><h4>Саммари <span class="badge">авто</span></h4>${sum}</div>
+    <div class="a-card"><h4>Аномалии <span class="badge">авто</span></h4>${anom}</div>
+    <div class="a-card"><h4>Рекомендации <span class="badge">черновик</span></h4>${recs}</div>`;
+  document.getElementById("agentRecalc").onclick=renderAgent;
+  document.getElementById("agentLLM").onclick=askClaude;
+}
+function digest(){
+  return {
+    лист:"Daily_JUN26",
+    команда:{операторов:TEAM.n,успешные_звонки:TEAM.calls,total_кп:TEAM.totalKp,успехи_кп:TEAM.successKp,уникальный_seller:TEAM.seller,cr_процент:TEAM.cr!=null?+TEAM.cr.toFixed(1):null,cr_медиана:TEAM.crMedian!=null?+TEAM.crMedian.toFixed(1):null},
+    операторы:OPS.map(o=>({имя:o.name,успешные_звонки:o.calls,total_кп:o.totalKp,успехи_кп:o.successKp,уникальный_seller:o.seller,cr:o.cr!=null?+o.cr.toFixed(1):null}))
+  };
+}
+async function askClaude(){
+  const btn=document.getElementById("agentLLM"); const out=document.getElementById("agentLLMOut");
+  btn.classList.add("spin"); btn.textContent="Думаю…"; out.classList.add("show"); out.textContent="Claude анализирует данные…";
+  const key=(document.getElementById("llmKey")||{}).value||"";
+  const prompt=`Ты — аналитик контакт-центра, помогаешь руководителю проекта P&S2. На основе данных по операторам (лист Daily_JUN26) подготовь на русском языке короткий разбор из трёх частей:\n1) САММАРИ ДИНАМИКИ — 3-5 предложений о картине в целом.\n2) АНОМАЛИИ — маркированный список необычных/тревожных моментов по конкретным операторам.\n3) ЧЕРНОВИК РЕКОМЕНДАЦИЙ РУКОВОДИТЕЛЮ — маркированный список конкретных действий.\nПиши деловым, конкретным языком, опирайся на цифры. Данные в JSON:\n\n`+JSON.stringify(digest(),null,1);
+  try{
+    const headers={"Content-Type":"application/json"};
+    if(key){headers["x-api-key"]=key;headers["anthropic-version"]="2023-06-01";headers["anthropic-dangerous-direct-browser-access"]="true";}
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,body:JSON.stringify({model:MODEL,max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    const text=(data.content||[]).map(b=>b.text||"").filter(Boolean).join("\n").trim();
+    out.textContent=text||"Пустой ответ модели.";
+  }catch(e){
+    out.innerHTML=`<b style="color:#FFC97A">Живой вызов Claude недоступен в этой среде.</b><br>На обычном хостинге статическая страница не может обратиться к нейросети без API-ключа. Локальный разбор выше уже готов и работает. Чтобы включить «настоящего» агента — либо откройте страницу внутри Claude, либо вставьте свой API-ключ ниже (он хранится только в этой вкладке и никуда не сохраняется).`;
+    if(!document.getElementById("llmKey")){
+      document.getElementById("agentKeyRow").innerHTML=`<span>API-ключ (опционально):</span><input id="llmKey" type="password" placeholder="sk-ant-..."><button class="btn" id="llmRetry">Повторить</button>`;
+      document.getElementById("llmRetry").onclick=askClaude;
+    }
+  }finally{ btn.classList.remove("spin"); btn.textContent="Разбор через Claude"; }
+}
+
+/* ====================== status / load ====================== */
+function setStatus(s){
+  const dot=document.getElementById("dot"),txt=document.getElementById("statusText"),sync=document.getElementById("syncLine");
+  const now=new Date().toLocaleTimeString("ru-RU");
+  if(s==="live"){dot.className="dot";txt.innerHTML='Онлайн · <b>Google Sheets</b>';sync.textContent="Синхронизировано: "+now;}
+  else if(s==="loading"){dot.className="dot off";txt.textContent="Обновление…";}
+  else{dot.className="dot err";txt.textContent="Нет доступа к данным";sync.textContent="Ошибка: "+now;}
+}
+function showBanner(){
+  const b=document.getElementById("fileBanner");
+  if(!LOCAL){b.classList.add("hidden");return;}
+  b.classList.remove("hidden");
+  b.innerHTML=`<b>Файл открыт локально (file://)</b> — браузер не пускает его к данным Google. Выложите файл на хостинг (перетащите на <code>tiiny.host</code> или <code>host-html.com</code>) и откройте по полученной ссылке — тогда данные подтянутся.`;
+}
+async function load(){
+  setStatus("loading");
+  try{
+    RAW=await fetchCSV(GID); buildModel(RAW); render(); setStatus("live");
+  }catch(e){
+    document.getElementById("root").innerHTML=`<section><div class="notice">Не удалось загрузить данные.<br><span style="font-size:12.5px">${LOCAL?"Страница открыта как локальный файл — выложите её на хостинг (см. жёлтую подсказку вверху).":"Причина: "+esc(e.message)+". Проверьте, что лист опубликован в веб."}</span></div></section>`;
+    setStatus("err");
+  }
+}
+async function refresh(){const btn=document.getElementById("refreshBtn");btn.classList.add("spin");await load();btn.classList.remove("spin");}
+
+document.getElementById("sheetLink").href=`https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pubhtml?gid=${GID}&single=true`;
+showBanner();
+load();
+setInterval(load,REFRESH_MS);
+</script>
+</body>
+</html>
